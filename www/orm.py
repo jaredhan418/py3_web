@@ -1,9 +1,7 @@
 #!/usr/local/bin/env python3
 # -*- coding: utf-8 -*-
 
-from orm import Model, String
 import asyncio, logging
-
 import aiomysql
 
 @asyncio.coroutine
@@ -12,7 +10,7 @@ def creat_pool(loop, **kw):
     global __pool
     __pool = yield from aiomysql.creat_pool(
         host=kw.get('host', 'localhost'),
-        port=kw.get('port',3306),
+        port=kw.get('port', 3306),
         user=kw['user'],
         password=kw['password'],
         db=kw['db'],
@@ -45,12 +43,10 @@ def execute(sql, args):
         try:
             cur = yield from conn.cursor()
             yield from cur.execute(sql.replace('?', '%s'), args)
-            affected = cur.rowcount 
+            affected = cur.rowcount
             yield from cur.close()
         except BaseException as e:
             raise
         return affected
 
-
-
-
+@asyncio.coroutine
