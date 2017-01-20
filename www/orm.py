@@ -1,16 +1,18 @@
 #!/usr/local/bin/env python3
 # -*- coding: utf-8 -*-
 
+__author__ = 'Jared Han'
+
 import asyncio, logging
 import aiomysql
 
 def log(sql, args=()):
     logging.info('SQL: %s' % sql)
 
-async def creat_pool(loop, **kw):
+async def create_pool(loop, **kw):
     logging.info('creat database connection pool...')
     global __pool
-    __pool = await aiomysql.creat_pool(
+    __pool = await aiomysql.create_pool(
         host=kw.get('host', 'localhost'),
         port=kw.get('port', 3306),
         user=kw['user'],
@@ -38,9 +40,9 @@ async def select(sql, args, size=None):
 
 async def execute(sql, args, autocommit=True):
     log(sql)
-    async with __pool as conn:
+    async with __pool.get() as conn:
         if not autocommit:
-            await conn.begin
+            await conn.begin()
         try:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute(sql.replace('?', '%s'), args)
@@ -51,6 +53,8 @@ async def execute(sql, args, autocommit=True):
             if not autocommit:
                 await conn.rollback()
             raise
+        finally:
+            conn.close()
         return affected
 
 def create_args_string(num):
@@ -75,7 +79,7 @@ class StringField(Field):
     def __init__(self, name=None, primary_key=False, default=None, ddl='varchar(100)'):
         super().__init__(name, ddl, primary_key, default)
 
-class BooleanField(Filed):
+class BooleanField(Field):
 
     def __init__(self, name=None, default=False):
         super().__init__(name, 'boolean', False, default)
@@ -99,7 +103,7 @@ class ModelMetaclass(type):
 
     def __new__(cls, name, bases, attrs):
         if name=='Model':
-            return type.__new__(cls, name, bases, attrs):
+            return type.__new__(cls, name, bases, attrs)
         tableName = attrs.get('__table__', None) or name
         logging.info('found model: %s (table: %s)' % (name, tableName))
         mappings = dict()
@@ -115,7 +119,7 @@ class ModelMetaclass(type):
                         raise StandardError('Duplicate primary key for field: %s' % k)
                     primaryKey = k
                 else:
-                    fileds.append(k)
+                    fields.append(k)
         if not primaryKey:
             raise StandardError('Primary key not found.')
         for k in mappings.keys():
@@ -156,7 +160,7 @@ class Model(dict, metaclass=ModelMetaclass):
                 value = field.default() if callable(field.default) else field.default
                 logging.debug('using default value for %s: %s' %(key, str(value)))
                 setattr(self, key, value)
-            return value
+        return value
 
     @classmethod
     async def findAll(cls, where=None, args=None, **kw):
@@ -205,23 +209,23 @@ class Model(dict, metaclass=ModelMetaclass):
             return None
         return cls(**rs[0])
 
-   async def save(self):
-       args = list(map(self.getValueOrDefault, self.__fields__))
-       args.append(self.getValueOrDefault) 
-       rows = await execute(self.__insert__, args)
-       if row !=1:
-           logging.warn('failed to insert record: affected rows: %s' % rows)
+    async def save(self):
+        args = list(map(self.getValueOrDefault, self.__fields__))
+        args.append(self.getValueOrDefault(self.__primary_key__)) 
+        rows = await execute(self.__insert__, args)
+        if rows !=1:
+            logging.warning('failed to insert record: affected rows: %s' % rows)
     
     async def update(self):
         args = list(map(self.getValue, self.__fields__))
         args.append(self.getValue(self.__primary_key__))
         rows = await execute(self.__update__, args)
         if rows != 1:
-            logging.warn('failed to update by primary key: affected rows: %s' % rows)
+            logging.warning('failed to update by primary key: affected rows: %s' % rows)
 
     async def remove(self):
         args = [self.getValue(self.__primary_key__)]
         rows = await execute(self.__delete__, args)
         if rows != 1:
-            logging.warn('failed to remove by primary key: affected rows: %s' % rows)
+            logging.warning('failed to remove by primary key: affected rows: %s' % rows)
     
