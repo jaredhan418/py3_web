@@ -3,7 +3,7 @@
 
 import orm
 import logging; logging.basicConfig(level=logging.INFO)
-import asyncio, os, json, time
+import asyncio, os, json, time, handlers
 
 from datetime import datetime
 from aiohttp import web
@@ -23,7 +23,7 @@ def init_jinja2(app, **kw):
     )
     path = kw.get('path', None)
     if path is None:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temples')
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
     logging.info('set jinja2 template path: %s' % path)
     env = Environment(loader=FileSystemLoader(path), **options)
     filters = kw.get('filters', None)
@@ -31,7 +31,6 @@ def init_jinja2(app, **kw):
         for name, f in filters.items():
             env.filters[name] = f
     app['__templating__'] = env
-
 
 async def logger_factory(app, handler):
     async def logger(request):
@@ -51,7 +50,6 @@ async def data_factory(app, handler):
                 logging.info('request form: %s' % str(request.__data__))
         return (await handler(request))
     return parse_data
-
 
 async def response_factory(app, handler):
     async def response(request):
@@ -104,7 +102,6 @@ def datetime_filter(t):
     dt = datetime.fromtimestamp(t)
     return u'%s年%s月%s日' % (dt.year, dt.month, dt.day)
 
-
 async def init(loop):
     await orm.create_pool(loop=loop, user='www-data', password='www-data', db='awesome')
     app = web.Application(loop=loop, middlewares=[
@@ -119,4 +116,4 @@ async def init(loop):
 
 loop = asyncio.get_event_loop()
 loop.run_until_complete(init(loop))
-loop.close()
+loop.run_forever()
